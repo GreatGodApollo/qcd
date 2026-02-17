@@ -8,7 +8,7 @@ type Message struct {
 
 func NewMessage(color chalk.Color, message string) *Message {
 	return &Message{
-		message: chalk.Cyan.Color("[QSR] ") + color.Color(message),
+		message: chalk.Cyan.Color("[QCD] ") + color.Color(message),
 	}
 }
 

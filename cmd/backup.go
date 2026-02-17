@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -29,7 +30,7 @@ var backupCmd = &cobra.Command{
 				fmt.Println(NewMessage(chalk.Red, "Restic Setup Failed: "+err.Error()))
 			} else {
 				fmt.Println(NewMessage(chalk.Green, "Restic Setup Complete. Running Backup Profile..."))
-				RunCommand("resticprofile", "backup", "system")
+				RunCommand("resticprofile", "backup", "default")
 			}
 		}
 	},
@@ -41,9 +42,10 @@ func init() {
 }
 
 func backupConfigs() {
-	dest := "./backups"
+	dest := viper.GetString("backup.dest")
+
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
-		os.Mkdir(dest, 0755)
+		os.MkdirAll(dest, 0755)
 	}
 
 	targets := viper.GetStringSlice("backup.targets")
@@ -52,7 +54,7 @@ func backupConfigs() {
 		targets = []string{"/etc/dovecot", "/etc/postfix"}
 	}
 
-	timestamp := "backup" // In real app, add timestamp. using fixed name for simplicity/test
+	timestamp := time.Now().Format("20060102_150405")
 	tarName := filepath.Join(dest, fmt.Sprintf("mail_config_%s.tar.gz", timestamp))
 
 	fmt.Println(NewMessage(chalk.Blue, "Creating tarball of mail configs..."))
@@ -105,7 +107,7 @@ func setupRestic() error {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Println(NewMessage(chalk.Yellow, "Creating basic resticprofile config..."))
 		configContent := `
-system:
+default:
   repository: "local:/var/backups/restic"
   password: "changeme_ccdc_password"
   initialize: true

@@ -175,7 +175,7 @@ func scanFileForSuspiciousContent(path string) {
 
 	strContent := string(content)
 	// Very basic signature check
-	suspicious := []string{"nc -e", "bash -i", "dev/tcp", "curl", "wget", "python -c", "systemctl", "iptables", "nft"}
+	suspicious := []string{"nc -e", "bash -i", "dev/tcp", "curl", "wget", "python -c", "systemctl stop", "iptables", "nft", "systemctl disable"}
 	found := false
 	for _, sig := range suspicious {
 		if strings.Contains(strContent, sig) {

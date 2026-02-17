@@ -51,6 +51,7 @@ func initConfig() {
 
 		// Set Defaults
 		viper.SetDefault("backup.targets", []string{"/etc/dovecot", "/etc/postfix"})
+		viper.SetDefault("backup.dest", "./backups")
 		viper.SetDefault("harden.shell_whitelist", []string{"root", "sysadmin"})
 		viper.SetDefault("persistence.ignore_users", []string{"root", "sysadmin"})
 
