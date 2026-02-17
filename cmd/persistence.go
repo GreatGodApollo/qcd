@@ -175,7 +175,7 @@ func scanFileForSuspiciousContent(path string) {
 
 	strContent := string(content)
 	// Very basic signature check
-	suspicious := []string{"nc -e", "bash -i", "dev/tcp", "curl", "wget", "python -c", "systemctl"}
+	suspicious := []string{"nc -e", "bash -i", "dev/tcp", "curl", "wget", "python -c", "systemctl", "iptables", "nft"}
 	found := false
 	for _, sig := range suspicious {
 		if strings.Contains(strContent, sig) {
@@ -186,13 +186,14 @@ func scanFileForSuspiciousContent(path string) {
 
 	if found && autoRemove {
 		fmt.Println(NewMessage(chalk.Yellow, "Backing up and cleaning "+path+"..."))
-		os.Rename(path, path+".defend_bak")
-		cleanFile(path, suspicious)
+		backupPath := path + ".defend_bak"
+		os.Rename(path, backupPath)
+		cleanFile(backupPath, path, suspicious)
 	}
 }
 
-func cleanFile(path string, badStrings []string) {
-	input, err := os.ReadFile(path)
+func cleanFile(source, dest string, badStrings []string) {
+	input, err := os.ReadFile(source)
 	if err != nil {
 		return
 	}
@@ -213,5 +214,5 @@ func cleanFile(path string, badStrings []string) {
 		}
 	}
 
-	os.WriteFile(path, []byte(strings.Join(output, "\n")), 0644)
+	os.WriteFile(dest, []byte(strings.Join(output, "\n")), 0644)
 }

@@ -1,0 +1,4 @@
+# Place your auditd rules here.
+# This file will be embedded into the qcd binary.
+# Example:
+# -w /etc/passwd -p wa -k identity

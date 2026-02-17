@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	_ "embed" // Use blank identifier for embed
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,12 @@ import (
 	"github.com/spf13/viper"
 	"github.com/ttacon/chalk"
 )
+
+//go:embed embedded/audit.rules
+var auditRules string
+
+//go:embed embedded/fallback.nft
+var fallbackNft string
 
 var firewallOnly bool
 
@@ -41,6 +48,11 @@ var hardenCmd = &cobra.Command{
 		fmt.Println(NewMessage(chalk.Blue, "Enforcing Nologin Shells..."))
 		if err := enforceNologin(); err != nil {
 			fmt.Println(NewMessage(chalk.Red, "Error enforcing nologin: "+err.Error()))
+		}
+
+		fmt.Println(NewMessage(chalk.Blue, "Setting up Auditd Rules..."))
+		if err := setupAuditd(); err != nil {
+			fmt.Println(NewMessage(chalk.Red, "Error setting up auditd: "+err.Error()))
 		}
 	},
 }
@@ -76,32 +88,14 @@ func applyFirewall() error {
 
 	fmt.Println(NewMessage(chalk.Yellow, "Falling back to internal nftables rules..."))
 
-	// 2. Fallback to nft direct commands
-	// basic mail server rules
-	commands := [][]string{
-		{"nft", "flush", "ruleset"},
-		{"nft", "add", "table", "inet", "filter"},
-		{"nft", "add", "chain", "inet", "filter", "input", "{ type filter hook input priority 0; policy drop; }"},
-		{"nft", "add", "chain", "inet", "filter", "forward", "{ type filter hook forward priority 0; policy drop; }"},
-		{"nft", "add", "chain", "inet", "filter", "output", "{ type filter hook output priority 0; policy accept; }"},
-		{"nft", "add", "rule", "inet", "filter", "input", "iif", "lo", "accept"},
-		{"nft", "add", "rule", "inet", "filter", "input", "ct", "state", "established,related", "accept"},
-		// SSH
-		{"nft", "add", "rule", "inet", "filter", "input", "tcp", "dport", "22", "accept"},
-		// SMTP (25, 465, 587)
-		{"nft", "add", "rule", "inet", "filter", "input", "tcp", "dport", "{ 25, 465, 587 }", "accept"},
-		// IMAP (143, 993)
-		{"nft", "add", "rule", "inet", "filter", "input", "tcp", "dport", "{ 143, 993 }", "accept"},
-		// POP3 (110, 995)
-		{"nft", "add", "rule", "inet", "filter", "input", "tcp", "dport", "{ 110, 995 }", "accept"},
-		// ICMP
-		{"nft", "add", "rule", "inet", "filter", "input", "ip", "protocol", "icmp", "accept"},
+	// 2. Fallback to embedded nft rules
+	fallbackPath := "/tmp/fallback.nft"
+	if err := os.WriteFile(fallbackPath, []byte(fallbackNft), 0600); err != nil {
+		return fmt.Errorf("failed to write fallback rules: %w", err)
 	}
 
-	for _, cmd := range commands {
-		if err := RunCommand(cmd[0], cmd[1:]...); err != nil {
-			return fmt.Errorf("failed to run command %v: %w", cmd, err)
-		}
+	if err := RunCommand("nft", "-f", fallbackPath); err != nil {
+		return fmt.Errorf("failed to apply fallback rules: %w", err)
 	}
 
 	return nil
@@ -172,5 +166,38 @@ func enforceNologin() error {
 	} else {
 		fmt.Println(NewMessage(chalk.Green, "No users found needing nologin enforcement (based on whitelist)."))
 	}
+	return nil
+}
+
+func setupAuditd() error {
+	if len(auditRules) == 0 {
+		return fmt.Errorf("embedded audit rules are empty")
+	}
+
+	// Determine location: Fedora uses /etc/audit/rules.d/ usually
+	targetPath := "/etc/audit/rules.d/qcd.rules"
+	if _, err := os.Stat("/etc/audit/rules.d"); os.IsNotExist(err) {
+		// Fallback to direct file if directory doesn't exist
+		targetPath = "/etc/audit/audit.rules"
+	}
+
+	fmt.Println(NewMessage(chalk.Yellow, "Writing audit rules to "+targetPath))
+
+	if err := os.WriteFile(targetPath, []byte(auditRules), 0600); err != nil {
+		return err
+	}
+
+	// Reload logic
+	fmt.Println(NewMessage(chalk.Yellow, "Reloading auditd..."))
+	// Try augenrules first if in rules.d
+	if strings.Contains(targetPath, "rules.d") {
+		if err := RunCommand("augenrules", "--load"); err != nil {
+			fmt.Println(NewMessage(chalk.Red, "augenrules failed, trying service reload..."))
+			RunCommand("service", "auditd", "restart")
+		}
+	} else {
+		RunCommand("service", "auditd", "restart")
+	}
+
 	return nil
 }
