@@ -104,25 +104,56 @@ func setupRestic() error {
 
 	// Configure Profile
 	configPath := "profiles.yaml" // current dir or /etc/resticprofile/profiles.yaml
+
+	// Use configured backup destination for restic repo as well
+	dest := viper.GetString("backup.dest")
+	if dest == "" {
+		dest = "./backups"
+	}
+	repoPath := filepath.Join(dest, "restic")
+
+	// Configure Password File
+	passwdPath := "/root/.restic-passwd"
+	// Check if running as root, if not, maybe use current user's home?
+	// CCDC tools usually run as root.
+	if os.Geteuid() != 0 {
+		home, _ := os.UserHomeDir()
+		passwdPath = filepath.Join(home, ".restic-passwd")
+	}
+
+	if _, err := os.Stat(passwdPath); os.IsNotExist(err) {
+		fmt.Println(NewMessage(chalk.Yellow, "Creating restic password file at "+passwdPath))
+		// Using a fixed password for CCDC simplicity/recovery, but safely stored
+		err := os.WriteFile(passwdPath, []byte("changeme_ccdc_password"), 0600)
+		if err != nil {
+			return fmt.Errorf("failed to create password file: %w", err)
+		}
+	}
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Println(NewMessage(chalk.Yellow, "Creating basic resticprofile config..."))
-		configContent := `
+		configContent := fmt.Sprintf(`
 default:
-  repository: "local:/var/backups/restic"
-  password: "changeme_ccdc_password"
+  repository: "local:%s"
+  password-file: "%s"
   initialize: true
   backup:
     source:
       - "/etc/dovecot"
       - "/etc/postfix"
       - "/var/www"
-    schedule: "Every 15 minutes"
+    schedule: "*-*-* *:00,15,30,45'"
     retention:
       keep-last: 5
-`
+`, repoPath, passwdPath)
 		// Note: Password should be prompted or secure. Using hardcoded for CCDC quick start.
 		os.WriteFile(configPath, []byte(configContent), 0600)
 	}
+
+	// Explicitly try to init to ensure it exists (ignoring error if it already exists)
+	// We do this because auto-init sometimes fails permissions or paths silently if not explicit
+	fmt.Println(NewMessage(chalk.Blue, "Ensuring Restic Repository Initialized..."))
+	RunCommand("resticprofile", "init")
 
 	return nil
 }

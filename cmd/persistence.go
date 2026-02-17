@@ -63,13 +63,20 @@ func checkSystemd() {
 	fmt.Println(NewMessage(chalk.Blue, "Checking Systemd Units..."))
 	// Simplified check for "odd" service names or modification times could go here.
 	// For now, listing services in /etc/systemd/system which are user created
-	files, err := os.ReadDir("/etc/systemd/system")
-	if err == nil {
-		for _, file := range files {
-			if strings.HasSuffix(file.Name(), ".service") || strings.HasSuffix(file.Name(), ".timer") {
-				fmt.Println(NewMessage(chalk.Yellow, "Found local systemd unit: "+file.Name()))
-				// If auto-remove, maybe disable? Too risky to auto-disable all.
-				// We will just alert for now unless we have a blacklist.
+	dirs := []string{"/etc/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system"}
+
+	for _, dir := range dirs {
+		files, err := os.ReadDir(dir)
+		if err == nil {
+			for _, file := range files {
+				if strings.HasSuffix(file.Name(), ".service") || strings.HasSuffix(file.Name(), ".timer") {
+					path := filepath.Join(dir, file.Name())
+					if dir == "/etc/systemd/system" {
+						fmt.Println(NewMessage(chalk.Yellow, "Found local systemd unit: "+path))
+					}
+					// Always scan content for bad stuff
+					scanFileForSuspiciousContent(path)
+				}
 			}
 		}
 	}
@@ -128,6 +135,20 @@ func checkUsers() {
 func checkStartup() {
 	fmt.Println(NewMessage(chalk.Blue, "Checking Startup Scripts..."))
 	files := []string{"/root/.bashrc", "/root/.profile", "/etc/profile", "/etc/bashrc"}
+
+	// Add user .bashrcs
+	homeDir := "/home"
+	users, err := os.ReadDir(homeDir)
+	if err == nil {
+		for _, u := range users {
+			if u.IsDir() {
+				files = append(files, filepath.Join(homeDir, u.Name(), ".bashrc"))
+				files = append(files, filepath.Join(homeDir, u.Name(), ".bash_profile"))
+				files = append(files, filepath.Join(homeDir, u.Name(), ".zshrc"))
+			}
+		}
+	}
+
 	for _, file := range files {
 		scanFileForSuspiciousContent(file)
 	}

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -11,11 +12,54 @@ import (
 	"github.com/ttacon/chalk"
 )
 
+var useTmux bool
+
 var monitorCmd = &cobra.Command{
 	Use:   "monitor",
 	Short: "Monitor system for changes",
 	Long:  `Continuously checks for new processes, socket connections, and file changes.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if useTmux {
+			// Check if tmux is installed
+			if _, err := exec.LookPath("tmux"); err != nil {
+				fmt.Println(NewMessage(chalk.Yellow, "Tmux not found. Attempting to install..."))
+				// Try dnf (Fedora) first
+				if err := RunCommand("dnf", "install", "-y", "tmux"); err != nil {
+					// Try apt (Debian/Ubuntu)
+					if err := RunCommand("apt-get", "install", "-y", "tmux"); err != nil {
+						fmt.Println(NewMessage(chalk.Red, "Failed to install tmux. Please install manually."))
+						return
+					}
+				}
+			}
+
+			// Re-launch self in tmux
+			exe, err := os.Executable()
+			if err != nil {
+				fmt.Println(NewMessage(chalk.Red, "Failed to find executable path: "+err.Error()))
+				return
+			}
+
+			// We need to call "monitor" without "--tmux" inside the window to avoid loop
+			// tmux new-window -n "Monitor" "{exe} monitor"
+			fmt.Println(NewMessage(chalk.Green, "Launching monitor in new tmux window..."))
+			err = RunCommand("tmux", "new-window", "-n", "Monitor", exe, "monitor")
+			if err != nil {
+				// If no session exists, maybe try new-session?
+				// "no server running on /tmp/tmux-..."
+				// Usually persistent CCDC envs have tmux running. If not:
+				fmt.Println(NewMessage(chalk.Yellow, "Failed to create window (is tmux running?). Trying new session..."))
+				err = RunCommand("tmux", "new-session", "-d", "-s", "defense", "-n", "Monitor", exe, "monitor")
+				if err != nil {
+					fmt.Println(NewMessage(chalk.Red, "Failed to launch tmux: "+err.Error()))
+				} else {
+					fmt.Println(NewMessage(chalk.Green, "Started new tmux session 'defense' with monitor."))
+					fmt.Println(NewMessage(chalk.Blue, "Attach with: tmux attach -t defense"))
+				}
+			}
+			return
+		}
+
 		fmt.Println(NewMessage(chalk.Green, "Starting System Monitor (Ctrl+C to stop)..."))
 
 		// Initial baseline
@@ -48,6 +92,8 @@ var monitorCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(monitorCmd)
+	monitorCmd.Flags().BoolVarP(&useTmux, "tmux", "t", false, "Install tmux and run monitor in a new window")
+	monitorCmd.Flags().IntVarP(&monitorInterval, "interval", "i", 2, "Monitoring interval in seconds")
 }
 
 func getRunningProcesses() map[string]string {
@@ -83,12 +129,24 @@ func isNumeric(s string) bool {
 }
 
 func checkConnections() {
-	// Run ss -antp
-	// grep for ESTAB
-	// This is hard to parse reliably across versions without a library, but for CCDC specific reporting:
-	// We can just dump new established connections if we track them.
-	// For now, let's just print active shell connections if found.
-	// grep for ":22" or ":4444" etc.
+	// Run ss -tunap to show TCP/UDP, numeric, all, processes
+	// We specifically look for ESTAB connections to show active sessions
+	out, err := exec.Command("ss", "-tunap").Output()
+	if err != nil {
+		// Fallback or just return silent?
+		// If ss isn't there, maybe netstat? keeping it simple for now.
+		return
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "ESTAB") {
+			// Print Established connections
+			// Highlight potentially dangerous ports?
+			// For now, just print valid established connections
+			fmt.Println(NewMessage(chalk.Magenta, "Active Connection: "+strings.TrimSpace(line)))
+		}
+	}
 }
 
 func checkFileChanges() {
