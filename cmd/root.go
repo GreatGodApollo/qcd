@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/ttacon/chalk"
-	"os"
-	"strings"
 )
 
 var cfgFile string
@@ -46,7 +48,13 @@ func initConfig() {
 		viper.AddConfigPath(home)
 		viper.SetConfigName(".qcd")
 		viper.SetConfigType("toml")
-		if createFileIfNotExist(home+"/", ".qcd.toml") != nil {
+
+		// Set Defaults
+		viper.SetDefault("backup.targets", []string{"/etc/dovecot", "/etc/postfix"})
+		viper.SetDefault("harden.shell_whitelist", []string{"root", "sysadmin"})
+		viper.SetDefault("persistence.ignore_users", []string{"root", "sysadmin"})
+
+		if err := createFileIfNotExist(home+"/", ".qcd.toml"); err != nil {
 			os.Exit(1)
 		}
 	}
@@ -56,26 +64,27 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println(NewMessage(chalk.Magenta, "Using config file:").ThenColor(chalk.Green, viper.ConfigFileUsed()))
 	}
-	// Preload configurations
-	if CheckError(viper.WriteConfig()) {
-		os.Exit(1)
+	// If read fails (e.g. empty file just created), write defaults
+	if err := viper.SafeWriteConfig(); err != nil {
+		// If SafeWrite fails (already exists), try WriteConfig
+		viper.WriteConfig()
 	}
 }
 
 func createFileIfNotExist(dir, file string) error {
-	if _, err := os.Stat(dir + file); err != nil {
+	path := filepath.Join(dir, file)
+	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			f, err := os.Create(dir + file)
-			if CheckError(err) {
-				return err
-			}
-			err = f.Close()
-			if CheckError(err) {
-				return err
-			}
-		} else {
-			return err
+			// rely on viper to write the file with defaults, but we need to ensure directory exists?
+			// Actually viper.SafeWriteConfig() can create the file.
+			// But strict requirement: "create a config file on the first run".
+			// standard viper flow:
+			// 1. Set Defaults
+			// 2. ReadConfig (fails if not exist)
+			// 3. If failed, SafeWriteConfig (creates file with defaults)
+			return nil
 		}
+		return err
 	}
 	return nil
 }
