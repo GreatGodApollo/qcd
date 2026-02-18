@@ -13,6 +13,7 @@ import (
 )
 
 var useTmux bool
+var monitorInterval int
 
 var monitorCmd = &cobra.Command{
 	Use:   "monitor",
