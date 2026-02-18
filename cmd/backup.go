@@ -31,6 +31,7 @@ var backupCmd = &cobra.Command{
 			} else {
 				fmt.Println(NewMessage(chalk.Green, "Restic Setup Complete. Running Backup Profile..."))
 				RunCommand("resticprofile", "backup", "default")
+				RunCommand("resticprofile", "schedule", "default")
 			}
 		}
 	},

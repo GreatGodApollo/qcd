@@ -67,7 +67,7 @@ var monitorCmd = &cobra.Command{
 		knownProcs := getRunningProcesses()
 		fmt.Println(NewMessage(chalk.Blue, fmt.Sprintf("Baseline taken: %d processes.", len(knownProcs))))
 
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(time.Duration(monitorInterval) * time.Second)
 		defer ticker.Stop()
 
 		for range ticker.C {
