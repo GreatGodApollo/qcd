@@ -1,0 +1,20 @@
+flush ruleset
+
+table inet filter {
+	chain input {
+		type filter hook input priority 0; policy drop;
+		iif "lo" accept
+		ct state established,related accept
+		tcp dport 22 accept
+		tcp dport 8000 accept
+		tcp dport 9997 accept
+		tcp dport 8089 accept
+		ip protocol icmp accept
+	}
+	chain forward {
+		type filter hook forward priority 0; policy drop;
+	}
+	chain output {
+		type filter hook output priority 0; policy accept;
+	}
+}
