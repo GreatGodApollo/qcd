@@ -18,7 +18,7 @@ var rootCmd = &cobra.Command{
 	Use:     "qcd <command> [<arguments>]",
 	Short:   "A quick and easy way to defend during CCDC",
 	Long:    "Quick CCDC Defender is a command line utility that allows you to quickly defend your system.",
-	Version: "0.0.2",
+	Version: "0.1.0",
 }
 
 func Execute() {
