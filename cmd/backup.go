@@ -52,16 +52,26 @@ func backupConfigs() {
 	targets := viper.GetStringSlice("backup.targets")
 	if len(targets) == 0 {
 		// Fallback if config is missing or empty
-		targets = []string{"/etc/dovecot", "/etc/postfix"}
+		targets = []string{"/etc/dovecot", "/etc/postfix", "/opt/splunk", "/var/www"}
+	}
+
+	actualTargets := []string{}
+
+	for _, target := range targets {
+		if _, err := os.Stat(target); os.IsNotExist(err) {
+			fmt.Println(NewMessage(chalk.Yellow, "Warning: Target "+target+" does not exist, skipping..."))
+		} else {
+			actualTargets = append(actualTargets, target)
+		}
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
-	tarName := filepath.Join(dest, fmt.Sprintf("mail_config_%s.tar.gz", timestamp))
+	tarName := filepath.Join(dest, fmt.Sprintf("bak_%s.tar.gz", timestamp))
 
-	fmt.Println(NewMessage(chalk.Blue, "Creating tarball of mail configs..."))
+	fmt.Println(NewMessage(chalk.Blue, "Creating tarball of directories..."))
 	// tar -czf ...
 	args := []string{"-czf", tarName}
-	args = append(args, targets...)
+	args = append(args, actualTargets...)
 
 	if err := RunCommand("tar", args...); err != nil {
 		fmt.Println(NewMessage(chalk.Red, "Failed to create backup tarball: "+err.Error()))
@@ -143,6 +153,7 @@ default:
       - "/etc/dovecot"
       - "/etc/postfix"
       - "/var/www"
+	  - "/opt/splunk"
     schedule: "*-*-* *:00,15,30,45'"
     retention:
       keep-last: 5

@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/go-cmd/cmd"
-	"github.com/ttacon/chalk"
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/go-cmd/cmd"
+	"github.com/ttacon/chalk"
 )
 
 func CheckError(err error) bool {

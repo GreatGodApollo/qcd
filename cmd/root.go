@@ -12,12 +12,13 @@ import (
 )
 
 var cfgFile string
+var systemType string
 
 var rootCmd = &cobra.Command{
 	Use:     "qcd <command> [<arguments>]",
 	Short:   "A quick and easy way to defend during CCDC",
 	Long:    "Quick CCDC Defender is a command line utility that allows you to quickly defend your system.",
-	Version: "0.0.1",
+	Version: "0.0.2",
 }
 
 func Execute() {
@@ -34,6 +35,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.qcd.toml)")
+	rootCmd.PersistentFlags().StringVar(&systemType, "sys", "", "system type (mail, web, splunk, etc.)")
 }
 
 func initConfig() {

@@ -196,7 +196,7 @@ func scanFileForSuspiciousContent(path string) {
 
 	strContent := string(content)
 	// Very basic signature check
-	suspicious := []string{"nc -e", "bash -i", "dev/tcp", "curl", "wget", "python -c", "systemctl stop", "iptables", "nft", "systemctl disable"}
+	suspicious := []string{"nc -e", "bash -i", "dev/tcp", "curl", "wget", "python", "systemctl stop", "iptables", "nft", "systemctl disable", "useradd", "usermod", "chown", "chmod", "logrotate", "PROMPT_COMMAND", "LD_PRELOAD", "nc"}
 	found := false
 	for _, sig := range suspicious {
 		if strings.Contains(strContent, sig) {
@@ -227,6 +227,7 @@ func cleanFile(source, dest string, badStrings []string) {
 		for _, bad := range badStrings {
 			if strings.Contains(line, bad) {
 				isBad = true
+				fmt.Println(NewMessage(chalk.Yellow, "Removing line: "+line))
 				break
 			}
 		}

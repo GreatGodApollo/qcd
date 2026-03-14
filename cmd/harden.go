@@ -15,10 +15,14 @@ import (
 //go:embed embedded/audit.rules
 var auditRules string
 
-//go:embed embedded/fallback.nft
-var fallbackNft string
+//go:embed embedded/nft/mail-fallback.nft
+var mailFallbackNft string
+
+//go:embed embedded/nft/splunk-fallback.nft
+var splunkFallbackNft string
 
 var firewallOnly bool
+var noNftBuild bool
 
 var hardenCmd = &cobra.Command{
 	Use:   "harden",
@@ -60,38 +64,54 @@ var hardenCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(hardenCmd)
 	hardenCmd.Flags().BoolVarP(&firewallOnly, "firewall-only", "f", false, "Only run firewall logic")
+	hardenCmd.Flags().BoolVarP(&noNftBuild, "no-nftbuild", "n", false, "Do not attempt to use nftbuild script (use embedded fallback rules only)")
 }
 
 func applyFirewall() error {
 	// 1. Attempt to download nftbuild
-	nftBuildUrl := "https://github.com/UWStout-CCDC/CCDC-scripts/raw/refs/heads/master/firewall/hostfirewall/nftbuild"
+	nftBuildUrl := "https://github.com/UWStout-CCDC/CCDC-scripts/raw/refs/heads/master/firewall/host_firewall/nftbuild"
 	nftBuildPath := "/tmp/nftbuild"
 
-	fmt.Println(NewMessage(chalk.Yellow, "Attempting to download nftbuild script..."))
-	err := DownloadFile(nftBuildPath, nftBuildUrl)
-	if err == nil {
-		// Download successful
-		err = os.Chmod(nftBuildPath, 0755)
+	if !noNftBuild {
+		fmt.Println(NewMessage(chalk.Yellow, "Attempting to download nftbuild script..."))
+		err := DownloadFile(nftBuildPath, nftBuildUrl)
 		if err == nil {
-			fmt.Println(NewMessage(chalk.Green, "nftbuild downloaded. Executing..."))
-			err = RunCommand(nftBuildPath, "-sys", "mail")
+			// Download successful
+			err = os.Chmod(nftBuildPath, 0755)
 			if err == nil {
-				return nil
+				fmt.Println(NewMessage(chalk.Green, "nftbuild downloaded. Executing..."))
+				err = RunCommand(nftBuildPath, "-sys", systemType)
+				if err == nil {
+					return nil
+				}
+				fmt.Println(NewMessage(chalk.Red, "nftbuild execution failed: "+err.Error()))
+			} else {
+				fmt.Println(NewMessage(chalk.Red, "Failed to chmod nftbuild: "+err.Error()))
 			}
-			fmt.Println(NewMessage(chalk.Red, "nftbuild execution failed: "+err.Error()))
 		} else {
-			fmt.Println(NewMessage(chalk.Red, "Failed to chmod nftbuild: "+err.Error()))
+			fmt.Println(NewMessage(chalk.Red, "Failed to download nftbuild: "+err.Error()))
 		}
 	} else {
-		fmt.Println(NewMessage(chalk.Red, "Failed to download nftbuild: "+err.Error()))
+		fmt.Println(NewMessage(chalk.Yellow, "Skipping nftbuild download/execution"))
 	}
 
 	fmt.Println(NewMessage(chalk.Yellow, "Falling back to internal nftables rules..."))
 
 	// 2. Fallback to embedded nft rules
 	fallbackPath := "/tmp/fallback.nft"
-	if err := os.WriteFile(fallbackPath, []byte(fallbackNft), 0600); err != nil {
-		return fmt.Errorf("failed to write fallback rules: %w", err)
+	switch systemType {
+	case "mail":
+		{
+			if err := os.WriteFile(fallbackPath, []byte(mailFallbackNft), 0600); err != nil {
+				return fmt.Errorf("failed to write fallback rules: %w", err)
+			}
+		}
+	case "splunk":
+		{
+			if err := os.WriteFile(fallbackPath, []byte(splunkFallbackNft), 0600); err != nil {
+				return fmt.Errorf("failed to write fallback rules: %w", err)
+			}
+		}
 	}
 
 	if err := RunCommand("nft", "-f", fallbackPath); err != nil {
