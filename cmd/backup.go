@@ -13,16 +13,21 @@ import (
 )
 
 var installRestic bool
+var skipTar bool
 
 var backupCmd = &cobra.Command{
 	Use:   "backup",
-	Short: "Backup critical services (Dovecot/Postfix)",
-	Long:  `Backs up Dovecot and Postfix configurations. Can automatically download and configure restic and resticprofile for robust backups.`,
+	Short: "Backup critical services",
+	Long:  `Backs up configurations. Can automatically download and configure restic and resticprofile for robust backups.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(NewMessage(chalk.Green, "Starting Backup Process..."))
 
 		// 1. Basic Tarball Backup of Configs
-		backupConfigs()
+		if !skipTar {
+			backupConfigs()
+		} else {
+			fmt.Println(NewMessage(chalk.Yellow, "Skipping tarball backup"))
+		}
 
 		// 2. Restic Integration
 		if installRestic {
@@ -40,6 +45,7 @@ var backupCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(backupCmd)
 	backupCmd.Flags().BoolVarP(&installRestic, "restic", "r", false, "Install and configure restic/resticprofile")
+	backupCmd.Flags().BoolVarP(&skipTar, "skip-tar", "s", false, "Skip basic tarball backup")
 }
 
 func backupConfigs() {

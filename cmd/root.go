@@ -18,7 +18,7 @@ var rootCmd = &cobra.Command{
 	Use:     "qcd <command> [<arguments>]",
 	Short:   "A quick and easy way to defend during CCDC",
 	Long:    "Quick CCDC Defender is a command line utility that allows you to quickly defend your system.",
-	Version: "0.1.0",
+	Version: "0.2.0",
 }
 
 func Execute() {
@@ -52,10 +52,10 @@ func initConfig() {
 		viper.SetConfigType("toml")
 
 		// Set Defaults
-		viper.SetDefault("backup.targets", []string{"/etc/dovecot", "/etc/postfix"})
+		viper.SetDefault("backup.targets", []string{"/etc/dovecot", "/etc/postfix", "/var/www", "/opt/splunk"})
 		viper.SetDefault("backup.dest", "./backups")
-		viper.SetDefault("harden.shell_whitelist", []string{"root", "sysadmin"})
-		viper.SetDefault("persistence.ignore_users", []string{"root", "sysadmin"})
+		viper.SetDefault("harden.shell_whitelist", []string{"root", "sysadmin", "splunkuser"})
+		viper.SetDefault("persistence.ignore_users", []string{"root", "sysadmin", "splunkuser"})
 
 		if err := createFileIfNotExist(home+"/", ".qcd.toml"); err != nil {
 			os.Exit(1)
