@@ -26,6 +26,7 @@ var persistenceCmd = &cobra.Command{
 		checkUsers()
 		checkStartup()
 		checkPreload()
+		checkSysconfig()
 		checkSUID() // Basic SUID check
 
 		fmt.Println(NewMessage(chalk.Green, "Persistence Scan Complete."))
@@ -154,6 +155,21 @@ func checkStartup() {
 	}
 }
 
+func checkSysconfig() {
+	fmt.Println(NewMessage(chalk.Blue, "Checking Sysconfig Files..."))
+	dirs := []string{"/etc/sysconfig", "/etc/default"}
+
+	for _, dir := range dirs {
+		files, err := os.ReadDir(dir)
+		if err == nil {
+			for _, file := range files {
+				path := filepath.Join(dir, file.Name())
+				scanFileForSuspiciousContent(path)
+			}
+		}
+	}
+}
+
 // --- Preload Checks ---
 func checkPreload() {
 	fmt.Println(NewMessage(chalk.Blue, "Checking LD_PRELOAD..."))
@@ -171,16 +187,17 @@ func checkPreload() {
 
 // --- SUID Checks ---
 func checkSUID() {
-	fmt.Println(NewMessage(chalk.Blue, "Checking common SUID binaries..."))
-	// Actual full scan is slow: find / -perm -4000
-	// We can do a quick check of common exploitable bins if widely known, or just run the find command
-	// user asked for SUID binaries abuse.
-	// Let's run a find command limited to /usr/bin and /bin for speed in this tool
-	// find /usr/bin /bin -perm -4000
-	// This is just a reporter primarily.
+	fmt.Println(NewMessage(chalk.Blue, "Checking SUID..."))
 
-	// We will just spawn the find command and let it output to stdout
+	// Look for binaries with SUID bit set
 	RunCommand("find", "/bin", "/usr/bin", "-perm", "-4000")
+}
+
+func checkForSuspiciousBinaries() {
+	fmt.Println(NewMessage(chalk.Blue, "Checking for suspicious binaries recently created"))
+
+	// Look for recently created executable files
+	RunCommand("find", "/", "-type", "f", "-mmin", "-60", "-executable", "2>/dev/null")
 }
 
 // --- Generic File Scanner ---
